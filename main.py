@@ -94,7 +94,7 @@ class Trafficker:
         json_output: JsonLayout = {"departures": [], "srvtime": "" }
         for dpt in self.departures:
             if dpt.delay is not None and dpt.delay.seconds != 0:
-                delay = str(dpt.delay.seconds // 60)
+                delay = f"+{str(dpt.delay.seconds // 60)}"
             else:
                 delay = ""
             departure = {

@@ -5,82 +5,112 @@ I know what you're thinking. I hate it too. ~ fwam
 """
 
 from pyhafas import HafasClient
+from pyhafas.client import StationBoardLeg
 from pyhafas.profile import VSNProfile, KVBProfile
 import datetime
 import json
 
+from typing import List, TypedDict, Dict
 
-client_vsn = HafasClient(VSNProfile())
-client_kvb = HafasClient(KVBProfile())
+# For typing purposes
+class JsonLayout(TypedDict):
+    departures: List[Dict[str, str]]
+    srvtime: str # The srvtime, servertime, is the time when the server was accessed. As such, it describes how old the received information is.
 
-departures_ehrenfeld = list()
-departures_venloerstr = list()
-departures_venloerstr_bus = list()
-departures = list()
-json_output = {"departures": list(), "srvtime": "" }
+class Trafficker:
+    def __init__(self) -> None:
+        # Clients
+        self.client_vsn: HafasClient = HafasClient(VSNProfile())
+        self.client_kvb: HafasClient = HafasClient(KVBProfile())
 
-dirty_phrases = [ "Köln Zollstock ", "Köln Nippes ", "Köln Junkersdorf ", "Köln Klettenberg ", "Köln Dellbrück ", "Köln Ehrenfeld ", "Kerpen ", "Leverkusen "]
-def get_departures():
-    departures_ehrenfeld = client_vsn.arrivals(
-        station="9406535", date=datetime.datetime.now() - datetime.timedelta(minutes=15), max_trips=10
-    )
-    departures_venloerstr = client_vsn.arrivals(
-        station=client_vsn.locations("Köln Venloer Str")[0],
-        products={"bus": True},
-        date=datetime.datetime.now(),
-        max_trips=10,
-    )
-    departures_venloerstr_bus = client_kvb.arrivals(
-        station="900000251",
-        date=datetime.datetime.now(),
-        products={
-            "bus": True,
-            "stadtbahn": True,
-            "regionalverkehr": False,
-            "fernverkehr": False,
-        },
-        max_trips=10,
-    )
+        self.dirty_phrases: List[str] = [ "Köln Zollstock ", "Köln Nippes ", "Köln Junkersdorf ", "Köln Klettenberg ", "Köln Dellbrück ", "Köln Ehrenfeld ", "Kerpen ", "Leverkusen "]
+        self.departures: List[StationBoardLeg] = self._get_departures()
 
-    return departures_venloerstr + departures_ehrenfeld + departures_venloerstr_bus
+        self.json_list: JsonLayout = self._prepare_json()
 
-departures = get_departures()
-departures.sort(key=lambda dep: dep.dateTime)
+    # Collects all departures and gathers them in a big list, that is then returned
+    # TODO: Make the API requests asynchronously so that the required time gets down to a third.
+    def _get_departures(self) -> List[StationBoardLeg]:
+        departures_ehrenfeld: List[StationBoardLeg] = self.client_vsn.arrivals(
+            station="9406535", date=datetime.datetime.now() - datetime.timedelta(minutes=15), max_trips=10
+        )
 
-for i in range(10):
-    departures.pop()
+        departures_venloerstr: List[StationBoardLeg] = self.client_vsn.arrivals(
+            station=self.client_vsn.locations("Köln Venloer Str")[0],
+            products={"bus": True},
+            date=datetime.datetime.now(),
+            max_trips=10,
+        )
 
-for x in departures:
-    for phrase in dirty_phrases:
-        if x.direction.find(phrase) != -1:
-            x.direction = x.direction.replace(phrase, "")
-            print(x.direction)
-        if x.direction.find("Bahnhof") != -1:
-            x.direction = x.direction.replace("Hauptbahnhof", "Hbf")
-            x.direction = x.direction.replace(" Bahnhof", "")
-            break
-    if x.cancelled:
-        departures.remove(x)
-    if x.direction == "Bf Ehrenfeld":
-        departures.remove(x)
-    if x.platform == None:
-        x.platform = "X"
+        departures_venloerstr_bus: List[StationBoardLeg] = self.client_kvb.arrivals(
+            station="900000251",
+            date=datetime.datetime.now(),
+            products={
+                "bus": True,
+                "stadtbahn": True,
+                "regionalverkehr": False,
+                "fernverkehr": False,
+            },
+            max_trips=10,
+        )
 
-    if x.delay is not None and x.delay.seconds != 0:
-        delay = str(x.delay.seconds // 60)
-    else:
-        delay = ""
-    departure = {
-        "line": x.name,
-        "direction": x.direction,
-        "departure": x.dateTime.strftime("%H:%M"),
-        "delay": delay,
-        "platform": x.platform
-    }
-    json_output["departures"].append(departure)
+        departures: List[StationBoardLeg] = departures_venloerstr + departures_ehrenfeld + departures_venloerstr_bus
+        departures.sort(key=lambda dep: dep.dateTime)
+        departures = self._clean_names_and_times(departures)
+        departures = self._remove_invalid(departures)
 
-json_output["srvtime"] = datetime.datetime.now().strftime("%d.%m.%Y - %H:%M Uhr")
+        distance_from_twenty: int = len(departures) - 20
+        if distance_from_twenty < 0:
+            distance_from_twenty = 0
+        for _ in range(distance_from_twenty):
+            departures.pop()
 
-json_output = json.dumps(json_output, indent=2)
-print(json_output)
-print(len(departures))
+        return departures
+
+    def _clean_names_and_times(self, departures: List[StationBoardLeg]) -> List[StationBoardLeg]:
+        for dpt in departures:
+            for phrase in self.dirty_phrases:
+                if dpt.direction.find("Bahnhof") != -1: # pyright: ignore
+                    dpt.direction = dpt.direction.replace("Hauptbahnhof", "Hbf") # pyright: ignore
+                    dpt.direction = dpt.direction.replace(" Bahnhof", "")
+                if dpt.direction.find(phrase) != -1: # pyright: ignore
+                    dpt.direction = dpt.direction.replace(phrase, "") # pyright: ignore
+                    break
+
+            if dpt.platform == None:
+                dpt.platform = "X"
+        return departures
+
+    def _remove_invalid(self, departures: List[StationBoardLeg]) -> List[StationBoardLeg]:
+        for dpt in departures:
+            if dpt.cancelled:
+                departures.remove(dpt)
+
+            if dpt.direction == "Bf Ehrenfeld":
+                departures.remove(dpt)
+        return departures
+
+    def _prepare_json(self) -> JsonLayout:
+        json_output: JsonLayout = {"departures": [], "srvtime": "" }
+        for dpt in self.departures:
+            if dpt.delay is not None and dpt.delay.seconds != 0:
+                delay = str(dpt.delay.seconds // 60)
+            else:
+                delay = ""
+            departure = {
+                "line": dpt.name,
+                "direction": dpt.direction,
+                "departure": dpt.dateTime.strftime("%H:%M"),
+                "delay": delay,
+                "platform": dpt.platform
+            }
+            json_output["departures"].append(departure)
+        json_output["srvtime"] = datetime.datetime.now().strftime("%d.%m.%Y - %H:%M Uhr")
+        return json_output
+
+    def output_json(self) -> str:
+        return json.dumps(self.json_list, indent=2)
+
+if __name__ == "__main__":
+    json_output: str = Trafficker().output_json()
+    print(json_output)

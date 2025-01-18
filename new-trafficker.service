@@ -1,0 +1,18 @@
+[Unit]
+Description=AutoC4 MQTT Trafficker
+PartOf=autoc4.target
+After=mosquitto.service network.target network-online.target
+Requires=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/opt/new-trafficker/trafficker-daemon.py
+WorkingDirectory=/opt/new-trafficker
+User=autoc4
+StandardOutput=journal
+StandardError=journal
+Restart=always
+RuntimeMaxSec=5m
+
+[Install]
+WantedBy=autoc4.target

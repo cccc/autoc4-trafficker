@@ -1,12 +1,6 @@
-"""
-KVB (as of 15.01.2025) does not support RE/RBs for some godforsaken reason
-Because of that, we're using HAFAS provided by Verkehrsverbund Süd-Niedersachsen
-I know what you're thinking. I hate it too. ~ fwam
-"""
-
 from pyhafas import HafasClient
 from pyhafas.client import StationBoardLeg
-from pyhafas.profile import VSNProfile, KVBProfile
+from pyhafas.profile import  KVBProfile
 import datetime
 import time
 import json
@@ -25,10 +19,9 @@ class JsonLayout(TypedDict):
 class Trafficker:
     def __init__(self) -> None:
         # Clients
-        self.client_vsn: HafasClient = HafasClient(VSNProfile())
         self.client_kvb: HafasClient = HafasClient(KVBProfile())
 
-        self.dirty_phrases: List[str] = [ "Köln Zollstock ", "Köln Nippes ", "Köln Junkersdorf ", "Köln Klettenberg ", "Köln Dellbrück ", "Köln Ehrenfeld ", "Kerpen ", "Leverkusen "]
+        self.dirty_phrases: List[str] = [ "Köln Zollstock ", "Köln Nippes ", "Köln Junkersdorf ", "Köln Klettenberg ", "Köln Dellbrück ", "Köln Ehrenfeld ", "Kerpen ", "Leverkusen ", ]
         self.departures: List[StationBoardLeg] = self._get_departures()
 
         self.json_list: JsonLayout = self._prepare_json()
@@ -36,18 +29,11 @@ class Trafficker:
     # Collects all departures and gathers them in a big list, that is then returned
     # TODO: Make the API requests asynchronously so that the required time gets down to a third.
     def _get_departures(self) -> List[StationBoardLeg]:
-        departures_ehrenfeld: List[StationBoardLeg] = self.client_vsn.departures(
-            station="9406535", date=datetime.datetime.now() - datetime.timedelta(minutes=15), max_trips=15
+        departures_ehrenfeld: List[StationBoardLeg] = self.client_kvb.departures(
+                station="900000835", date=datetime.datetime.now() - datetime.timedelta(minutes=15), products = { "bus": False, "stadtbahn": False, "regionalverkehr": True, "fernverkehr": True }, max_trips=30
         )
 
-        departures_venloerstr: List[StationBoardLeg] = self.client_vsn.departures(
-            station=self.client_vsn.locations("Köln Venloer Str")[0],
-            products={"bus": True},
-            date=datetime.datetime.now(),
-            max_trips=15,
-        )
-
-        departures_venloerstr_bus: List[StationBoardLeg] = self.client_kvb.departures(
+        departures_venloerstr: List[StationBoardLeg] = self.client_kvb.departures(
             station="900000251",
             date=datetime.datetime.now(),
             products={
@@ -56,10 +42,10 @@ class Trafficker:
                 "regionalverkehr": False,
                 "fernverkehr": False,
             },
-            max_trips=15,
+            max_trips=30,
         )
 
-        departures: List[StationBoardLeg] = departures_venloerstr + departures_ehrenfeld + departures_venloerstr_bus
+        departures: List[StationBoardLeg] = departures_venloerstr + departures_ehrenfeld 
         departures.sort(key=lambda dep: dep.dateTime)
         departures = self._clean_names_and_times(departures)
         departures = self._remove_invalid(departures)
@@ -84,10 +70,14 @@ class Trafficker:
 
     def _clean_names_and_times(self, departures: List[StationBoardLeg]) -> List[StationBoardLeg]:
         for dpt in departures:
+            if dpt.name == "RE1RRX":
+                dpt.name = "RE1"
+            if dpt.name == "3" or dpt.name == "4":
+                dpt.platform = "U"
             for phrase in self.dirty_phrases:
-                if dpt.direction.find("Bahnhof") != -1: # pyright: ignore
-                    dpt.direction = dpt.direction.replace("Hauptbahnhof", "Hbf") # pyright: ignore
-                    dpt.direction = dpt.direction.replace(" Bahnhof", "")
+                dpt.direction = dpt.direction.replace("Hauptbahnhof", "Hbf") # pyright: ignore
+                dpt.direction = dpt.direction.replace("Bahnhof", "")
+                dpt.direction = dpt.direction.replace("Bf", "")
                 if dpt.direction.find(phrase) != -1: # pyright: ignore
                     dpt.direction = dpt.direction.replace(phrase, "") # pyright: ignore
                     break

@@ -36,18 +36,18 @@ class Trafficker:
     # Collects all departures and gathers them in a big list, that is then returned
     # TODO: Make the API requests asynchronously so that the required time gets down to a third.
     def _get_departures(self) -> List[StationBoardLeg]:
-        departures_ehrenfeld: List[StationBoardLeg] = self.client_vsn.arrivals(
+        departures_ehrenfeld: List[StationBoardLeg] = self.client_vsn.departures(
             station="9406535", date=datetime.datetime.now() - datetime.timedelta(minutes=15), max_trips=15
         )
 
-        departures_venloerstr: List[StationBoardLeg] = self.client_vsn.arrivals(
+        departures_venloerstr: List[StationBoardLeg] = self.client_vsn.departures(
             station=self.client_vsn.locations("Köln Venloer Str")[0],
             products={"bus": True},
             date=datetime.datetime.now(),
             max_trips=15,
         )
 
-        departures_venloerstr_bus: List[StationBoardLeg] = self.client_kvb.arrivals(
+        departures_venloerstr_bus: List[StationBoardLeg] = self.client_kvb.departures(
             station="900000251",
             date=datetime.datetime.now(),
             products={
@@ -127,7 +127,7 @@ class Trafficker:
         return json.dumps(self.json_list, indent=2)
 
 if __name__ == "__main__":
-    mqttc = mqtt.Client(client_id="newtrafficker", callback_api_version=mqtt.CallbackAPIVersion.VERSION1)
+    mqttc = mqtt.Client(client_id="trafficker", callback_api_version=mqtt.CallbackAPIVersion.VERSION1)
 
     def on_connect(a, b, flags, rc):
         if rc != 0:
@@ -142,6 +142,6 @@ if __name__ == "__main__":
 
     while(True):
         json_output: str = Trafficker().output_json()
-        publish.single('traffic/newdepartures', payload=json_output, hostname="autoc4", port=1883, keepalive=60)
+        publish.single('traffic/departures', payload=json_output, hostname="autoc4", port=1883, keepalive=60)
         time.sleep(5)
 

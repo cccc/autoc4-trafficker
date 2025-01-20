@@ -117,7 +117,7 @@ class Trafficker:
         return json.dumps(self.json_list, indent=2)
 
 if __name__ == "__main__":
-    mqttc = mqtt.Client(client_id="trafficker", callback_api_version=mqtt.CallbackAPIVersion.VERSION1)
+    mqttc = mqtt.Client(client_id="trafficker")
 
     def on_connect(a, b, flags, rc):
         if rc != 0:

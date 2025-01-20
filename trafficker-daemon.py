@@ -21,7 +21,7 @@ class Trafficker:
         # Clients
         self.client_kvb: HafasClient = HafasClient(KVBProfile())
 
-        self.dirty_phrases: List[str] = [ "Köln Zollstock ", "Köln Nippes ", "Köln Junkersdorf ", "Köln Klettenberg ", "Köln Dellbrück ", "Köln Ehrenfeld ", "Kerpen ", "Leverkusen ", ]
+        self.dirty_phrases: List[str] = [ "Köln Zollstock ", "Köln Nippes ", "Köln Junkersdorf ", "Köln Klettenberg ", "Köln Dellbrück ", "Köln Ehrenfeld ", "Kerpen ", "Leverkusen ", "Windeck " ]
         self.departures: List[StationBoardLeg] = self._get_departures()
 
         self.json_list: JsonLayout = self._prepare_json()

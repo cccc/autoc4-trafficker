@@ -1,1 +1,2 @@
 pyhafas==0.6.1
+paho-mqtt==2.1.0

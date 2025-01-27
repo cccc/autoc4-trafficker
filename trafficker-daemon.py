@@ -6,7 +6,9 @@ import time
 import json
 import sys
 
-from typing import List, TypedDict, Dict
+import asyncio
+
+from typing import List, TypedDict, Dict, Any, Callable
 
 import paho.mqtt.publish as publish 
 import paho.mqtt.client as mqtt
@@ -24,28 +26,45 @@ class Trafficker:
         self.dirty_phrases: List[str] = [ "Köln Zollstock ", "Köln Nippes ", "Köln Junkersdorf ", "Köln Klettenberg ", "Köln Dellbrück ", "Köln Ehrenfeld ", "Kerpen ", "Leverkusen ", "Windeck " ]
         self.departures: List[StationBoardLeg] = self._get_departures()
 
+        # Departure lists (because asyncio)
+        self.ehrenfeld_departures: List[StationBoardLeg]
+        self.venloerstr_departures: List[StationBoardLeg]
+
         self.json_list: JsonLayout = self._prepare_json()
 
-    # Collects all departures and gathers them in a big list, that is then returned
-    # TODO: Make the API requests asynchronously so that the required time gets down to a third.
-    def _get_departures(self) -> List[StationBoardLeg]:
-        departures_ehrenfeld: List[StationBoardLeg] = self.client_kvb.departures(
+
+
+    async def _gather_results(self):
+        def make_ehrenfeld_call() -> None:
+            self.ehrenfeld_departures = self.client_kvb.departures(
                 station="900000835", date=datetime.datetime.now() - datetime.timedelta(minutes=15), products = { "bus": False, "stadtbahn": False, "regionalverkehr": True, "fernverkehr": True }, max_trips=30
-        )
+            )
 
-        departures_venloerstr: List[StationBoardLeg] = self.client_kvb.departures(
-            station="900000251",
-            date=datetime.datetime.now(),
-            products={
-                "bus": True,
-                "stadtbahn": True,
-                "regionalverkehr": False,
-                "fernverkehr": False,
-            },
-            max_trips=30,
-        )
+        def make_venloerstr_call() -> None:
+            self.venloerstr_departures = self.client_kvb.departures(
+                station="900000251",
+                date=datetime.datetime.now(),
+                products={
+                    "bus": True,
+                    "stadtbahn": True,
+                    "regionalverkehr": False,
+                    "fernverkehr": False,
+                },
+                max_trips=30,
+            )
 
-        departures: List[StationBoardLeg] = departures_venloerstr + departures_ehrenfeld 
+        tasks = [
+            asyncio.to_thread(make_ehrenfeld_call),
+            asyncio.to_thread(make_venloerstr_call),
+        ]
+
+        await asyncio.gather(*tasks)
+
+    # Collects all departures and gathers them in a big list, that is then returned
+    def _get_departures(self) -> List[StationBoardLeg]:
+        asyncio.run(self._gather_results())
+
+        departures: List[StationBoardLeg] = self.ehrenfeld_departures + self.venloerstr_departures
         departures.sort(key=lambda dep: dep.dateTime)
         departures = self._clean_names_and_times(departures)
         departures = self._remove_invalid(departures)

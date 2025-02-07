@@ -37,7 +37,14 @@ class Trafficker:
     async def _gather_results(self):
         def make_ehrenfeld_call() -> None:
             self.ehrenfeld_departures = self.client_kvb.departures(
-                station="900000835", date=datetime.datetime.now() - datetime.timedelta(minutes=15), products = { "bus": False, "stadtbahn": False, "regionalverkehr": True, "fernverkehr": True }, max_trips=30
+                station="900000835",
+                date=datetime.datetime.now() - datetime.timedelta(minutes=15),
+                products ={
+                    "bus": True,
+                    "stadtbahn": False,
+                    "regionalverkehr": True,
+                    "fernverkehr": True},
+                max_trips=30
             )
 
         def make_venloerstr_call() -> None:

@@ -52,7 +52,7 @@ class Trafficker:
                 station="900000251",
                 date=datetime.datetime.now(),
                 products={
-                    "bus": True,
+                    "bus": False,
                     "stadtbahn": True,
                     "regionalverkehr": False,
                     "fernverkehr": False,
